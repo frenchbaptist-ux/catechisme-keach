@@ -2,17 +2,24 @@ import telebot
 import json
 import os
 
-# Ton token est déjà défini
-bot = telebot.TeleBot(BOT_TOKEN)
+# 1. Récupération sécurisée du Token depuis les variables d'environnement de Render
+# Note l'utilisation des guillemets ' ' à l'intérieur de la parenthèse
+TOKEN = os.environ.get('BOT_TOKEN')
 
-# Fonction pour charger le fichier JSON
+# On vérifie que le token est bien présent pour éviter de faire planter le bot
+if not TOKEN:
+    raise ValueError("La variable d'environnement BOT_TOKEN est manquante sur Render !")
+
+bot = telebot.TeleBot(TOKEN)
+
+# 2. Fonction pour charger le fichier JSON avec le bon encodage
 def load_data():
-    # On utilise un chemin relatif pour que cela fonctionne sur Render
     base_path = os.path.dirname(__file__)
     file_path = os.path.join(base_path, 'keach.json')
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
+# 3. Gestionnaire de messages pour les chiffres (ex: "1", "2")
 @bot.message_handler(func=lambda message: message.text.isdigit())
 def handle_question(message):
     try:
@@ -23,19 +30,19 @@ def handle_question(message):
             question = data[num]["question"]
             reponse = data[num]["reponse"]
 
-            # Formatage : **Numéro. Question** (en gras) suivi de la réponse
-            # On utilise le MarkdownV2 ou Markdown pour le gras
+            # Formatage : Gras pour le numéro et la question
+            # On utilise les étoiles * * pour le mode Markdown
             texte_final = f"*{num}. {question}*\n\n{reponse}"
             
             bot.send_message(message.chat.id, texte_final, parse_mode='Markdown')
         else:
-            bot.reply_to(message, "Désolé, cette question n'est pas encore disponible dans le catéchisme.")
+            bot.reply_to(message, "Désolé, cette question n'est pas encore disponible.")
             
     except Exception as e:
-        print(f"Erreur : {e}")
-        bot.reply_to(message, "Une erreur est survenue lors de la lecture du catéchisme.")
+        print(f"Erreur lors du traitement : {e}")
+        bot.reply_to(message, "Une erreur technique est survenue.")
 
-# Lancement du bot
+# 4. Lancement du bot avec mode "infini" pour Render
 if __name__ == "__main__":
-    print("Bot Keach en cours d'exécution...")
+    print("Le bot Keach est lancé et prêt !")
     bot.infinity_polling()
