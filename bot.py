@@ -1,69 +1,41 @@
-import json
 import telebot
+import json
 import os
-from flask import Flask
-from threading import Thread
 
-# --- SYSTÈME DE MAINTIEN POUR RENDER ---
-app = Flask('')
+# Ton token est déjà défini
+bot = telebot.TeleBot(BOT_TOKEN)
 
-@app.route('/')
-def home():
-    return "Le bot est opérationnel !"
+# Fonction pour charger le fichier JSON
+def load_data():
+    # On utilise un chemin relatif pour que cela fonctionne sur Render
+    base_path = os.path.dirname(__file__)
+    file_path = os.path.join(base_path, 'keach.json')
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
-def run():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.daemon = True
-    t.start()
-
-# --- CONFIGURATION DU BOT ---
-TOKEN = os.environ.get('BOT_TOKEN')
-bot = telebot.TeleBot(TOKEN)
-
-def charger_confession():
+@bot.message_handler(func=lambda message: message.text.isdigit())
+def handle_question(message):
     try:
-        base_dir = os.path.dirname(__file__)
-        path = os.path.join(base_dir, 'confession.json')
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {}
+        data = load_data()
+        num = message.text.strip()
 
-confession_data = charger_confession()
+        if num in data:
+            question = data[num]["question"]
+            reponse = data[num]["reponse"]
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    text = message.text.strip()
-    try:
-        me = bot.get_me()
-        bot_username = f"@{me.username}"
-    except:
-        bot_username = ""
-    
-    is_group = message.chat.type in ['group', 'supergroup']
-    if is_group:
-        if bot_username in text:
-            clean_text = text.replace(bot_username, "").strip()
+            # Formatage : **Numéro. Question** (en gras) suivi de la réponse
+            # On utilise le MarkdownV2 ou Markdown pour le gras
+            texte_final = f"*{num}. {question}*\n\n{reponse}"
+            
+            bot.send_message(message.chat.id, texte_final, parse_mode='Markdown')
         else:
-            return
-    else:
-        clean_text = text
+            bot.reply_to(message, "Désolé, cette question n'est pas encore disponible dans le catéchisme.")
+            
+    except Exception as e:
+        print(f"Erreur : {e}")
+        bot.reply_to(message, "Une erreur est survenue lors de la lecture du catéchisme.")
 
-    if '.' in clean_text:
-        parts = clean_text.split('.')
-        if len(parts) == 2:
-            c_id = parts[0].strip()
-            p_id = parts[1].strip()
-            if c_id in confession_data and p_id in confession_data[c_id]:
-                # LA LIGNE MODIFIÉE CI-DESSOUS
-                rep = f"« {confession_data[c_id][p_id]} »\n\n— Confession de foi baptiste de Londres de 1689, {c_id}.{p_id}."
-                bot.reply_to(message, rep)
-
+# Lancement du bot
 if __name__ == "__main__":
-    bot.delete_webhook()
-    keep_alive()
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    print("Bot Keach en cours d'exécution...")
+    bot.infinity_polling()
